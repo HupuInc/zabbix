@@ -67,7 +67,7 @@ AC_HELP_STRING([--with-kafka@<:@=DIR@:>@],[Include KAFKA support @<:@default=no@
 
                KAFKA_CFLAGS="-I$KAFKA_INCDIR"
                KAFKA_LDFLAGS="-L$KAFKA_LIBDIR"
-               KAFKA_LIBS="-lrdkafka $KAFKA_LIBS"
+               KAFKA_LIBS="-lrdkafka -lpthread -lz -lrt $KAFKA_LIBS"
 
                found_kafka="yes"
                AC_DEFINE(HAVE_KAFKA,1,[Define to 1 if KAFKA should be enabled.])
