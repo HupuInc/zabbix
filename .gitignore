@@ -1,0 +1,12 @@
+#Makefile
+Makefile
+
+#deps
+.deps
+
+autom4te.cache
+
+include/config.h
+
+*.log
+*.status
