@@ -108,6 +108,9 @@
 /* Define to 1 if Jabber should be enabled. */
 #undef HAVE_JABBER
 
+/* Define to 1 if KAFKA should be enabled. */
+#undef HAVE_KAFKA
+
 /* Define to 1 if you have the <knlist.h> header file. */
 #undef HAVE_KNLIST_H
 

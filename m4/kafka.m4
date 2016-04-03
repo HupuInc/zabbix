@@ -71,7 +71,6 @@ AC_HELP_STRING([--with-kafka@<:@=DIR@:>@],[Include KAFKA support @<:@default=no@
 
                found_kafka="yes"
                AC_DEFINE(HAVE_KAFKA,1,[Define to 1 if KAFKA should be enabled.])
-	       AC_DEFINE(KAFKA_DEPRECATED, 1, [Define to 1 if KAFKA depricated functions is used.])
                AC_MSG_RESULT(yes)
 
 	       if test "x$enable_static" = "xyes"; then
