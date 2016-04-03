@@ -44,6 +44,9 @@ extern int		server_num, process_num;
 #elif defined(ZABBIX_DAEMON)
 #	include "daemon.h"
 #endif
+#ifdef HAVE_KAFKA
+#	include <librdkafka/rdkafka.h>
+#endif
 
 ZBX_THREAD_LOCAL static ZBX_ACTIVE_METRIC	*active_metrics = NULL;
 ZBX_THREAD_LOCAL static ZBX_ACTIVE_BUFFER	buffer;
@@ -571,6 +574,196 @@ static int	check_response(char *response)
 	return ret;
 }
 
+#ifdef HAVE_KAFKA
+static int send_kafka(char **metrics, int count)
+{
+	const char		*__function_name = "send_kafka";
+
+	int ret = FAIL;
+	rd_kafka_t *rk;
+	rd_kafka_conf_t *conf;
+	rd_kafka_topic_conf_t *topic_conf;
+	rd_kafka_topic_t *rkt;
+	char *brokers = "192.168.9.206:9092,192.168.9.205:9092,192.168.9.232:9092";
+	char *topic = "zabbix-metrics";
+	char errstr[512], buf[MAX_STRING_LEN];
+	// char tmp[MAX_STRING_LEN], host[MAX_STRING_LEN], key[MAX_STRING_LEN], value[MAX_STRING_LEN];
+	int i, sendcnt = 0;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() JSON metrics:'%s'", __function_name, metrics);
+
+	conf = rd_kafka_conf_new();
+	topic_conf = rd_kafka_topic_conf_new();
+
+	/* Create Kafka handle */
+	if (!(rk = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
+				errstr, sizeof(errstr)))) {
+		zabbix_log(LOG_LEVEL_ERR, "Failed to create new producer: %s", errstr);
+		goto ret;
+	}
+
+	/* Add brokers */
+	if (rd_kafka_brokers_add(rk, brokers) == 0) {
+		zabbix_log(LOG_LEVEL_ERR, "No valid brokers specified");
+		goto ret;
+	}
+
+	/* Create topic */
+	rkt = rd_kafka_topic_new(rk, topic, topic_conf);
+    topic_conf = NULL;
+
+	for (i = 0; i < count; i++)
+	{
+		buf = metrics[i];
+		/* Send/Produce message. */
+		size_t len = strlen(buf);
+		if (rd_kafka_produce(rkt, RD_KAFKA_PARTITION_UA,
+				     RD_KAFKA_MSG_F_FREE,
+				     buf, len,
+				     NULL, 0,
+				     NULL) == -1) {
+			zabbix_log(LOG_LEVEL_ERR, "Failed to produce to topic %s: %s", rd_kafka_topic_name(rkt), rd_kafka_err2str(rd_kafka_last_error()));
+			continue;
+		}
+		sendcnt++;
+	}
+
+ret:
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%s send count = %d", __function_name, zbx_result_string(ret), sendcnt);
+	return ret;
+}
+
+static char	*__zbx_json_insstring(char *p, const char *string, zbx_json_type_t type)
+{
+	const char	*sptr;
+	char		buffer[] = {"null"};
+
+	if (NULL != string && ZBX_JSON_TYPE_STRING == type)
+		*p++ = '"';
+
+	for (sptr = (NULL != string ? string : buffer); '\0' != *sptr; sptr++)
+	{
+		switch (*sptr)
+		{
+			case '"':		/* quotation mark */
+				*p++ = '\\';
+				*p++ = '"';
+				break;
+			case '\\':		/* reverse solidus */
+				*p++ = '\\';
+				*p++ = '\\';
+				break;
+			case '\b':		/* backspace */
+				*p++ = '\\';
+				*p++ = 'b';
+				break;
+			case '\f':		/* formfeed */
+				*p++ = '\\';
+				*p++ = 'f';
+				break;
+			case '\n':		/* newline */
+				*p++ = '\\';
+				*p++ = 'n';
+				break;
+			case '\r':		/* carriage return */
+				*p++ = '\\';
+				*p++ = 'r';
+				break;
+			case '\t':		/* horizontal tab */
+				*p++ = '\\';
+				*p++ = 't';
+				break;
+			default:
+				if (0 != iscntrl(*sptr))
+				{
+					*p++ = '\\';
+					*p++ = 'u';
+					*p++ = '0';
+					*p++ = '0';
+					*p++ = zbx_num2hex((*sptr >> 4) & 0xf);
+					*p++ = zbx_num2hex(*sptr & 0xf);
+				}
+				else
+					*p++ = *sptr;
+		}
+	}
+
+	if (NULL != string && ZBX_JSON_TYPE_STRING == type)
+		*p++ = '"';
+
+	return p;
+}
+
+static void __zbx_json_insmetric(char *json_metric, const char *string, zbx_json_type_t type, zbx_json_status_t status) {
+	json_metric = __zbx_json_insstring(json_metric, string, type);
+	if (status == ZBX_JSON_COMMA)
+		*json_metric++ = ',';
+	else if(status == ZBX_JSON_COLON)
+		*json_metric++ = ':';
+}
+
+static char *__zbx_jsonstring_init(char *json_metric, ZBX_ACTIVE_BUFFER_ELEMENT *el) {
+	char buf[MAX_STRING_LEN];
+	*json_metric++ = '{';
+	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_HOST, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	__zbx_json_insmetric(json_metric, el->host, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+
+	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_KEY, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	__zbx_json_insmetric(json_metric, el->key, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+
+	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_VALUE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	__zbx_json_insmetric(json_metric, el->value, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+
+	if (ITEM_STATE_NOTSUPPORTED == el->state) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_STATE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, ITEM_STATE_NOTSUPPORTED);
+		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	}
+	if (0 != el->lastlogsize) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGLASTSIZE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->lastlogsize);
+		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	}
+	if (el->mtime) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_MTIME, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->mtime);
+		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	}
+	if (el->timestamp) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGTIMESTAMP, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->timestamp);
+		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	}
+	if (el->source) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGSOURCE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		__zbx_json_insmetric(json_metric, el->source, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+	}
+	if (el->severity) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGSEVERITY, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->severity);
+		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	}
+	if (el->logeventid) {
+		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGEVENTID, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->logeventid);
+		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	}
+	zbx_json_adduint64(&json, ZBX_PROTO_TAG_CLOCK, el->ts.sec);
+	zbx_json_adduint64(&json, ZBX_PROTO_TAG_NS, el->ts.ns);
+
+	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_CLOCK, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->ts.sec);
+	__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+
+	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_NS, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->ts.ns);
+	__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+
+	*json_metric++ = '}';
+	return json_metric;
+}
+#endif
+
 /******************************************************************************
  *                                                                            *
  * Function: send_buffer                                                      *
@@ -604,6 +797,11 @@ static int	send_buffer(const char *host, unsigned short port)
 	if (0 == buffer.count)
 		goto ret;
 
+	#ifdef HAVE_KAFKA
+	char *metrics[buffer.count], *json_metric;
+	int buffer_size_last = 0;
+	#endif
+
 	now = (int)time(NULL);
 
 	if (CONFIG_BUFFER_SIZE / 2 > buffer.pcount && CONFIG_BUFFER_SIZE > buffer.count &&
@@ -621,7 +819,6 @@ static int	send_buffer(const char *host, unsigned short port)
 	for (i = 0; i < buffer.count; i++)
 	{
 		el = &buffer.data[i];
-
 		zbx_json_addobject(&json, NULL);
 		zbx_json_addstring(&json, ZBX_PROTO_TAG_HOST, el->host, ZBX_JSON_TYPE_STRING);
 		zbx_json_addstring(&json, ZBX_PROTO_TAG_KEY, el->key, ZBX_JSON_TYPE_STRING);
@@ -643,6 +840,13 @@ static int	send_buffer(const char *host, unsigned short port)
 		zbx_json_adduint64(&json, ZBX_PROTO_TAG_CLOCK, el->ts.sec);
 		zbx_json_adduint64(&json, ZBX_PROTO_TAG_NS, el->ts.ns);
 		zbx_json_close(&json);
+		#ifdef HAVE_KAFKA
+		json_metric = zbx_malloc(json_metric, json.buffer_allocated - buffer_size_last);
+		json_metric = __zbx_jsonstring_init(json_metric, el);
+		buffer_size_last = json.buffer_allocated;
+		zbx_strcpy_alloc(&(metrics[i]), sizeof(json_metric), 0, json_metric);
+		zbx_free(json_metric);
+		#endif
 	}
 
 	zbx_json_close(&json);
@@ -677,6 +881,13 @@ static int	send_buffer(const char *host, unsigned short port)
 	}
 	else
 		err_send_step = "[connect] ";
+
+	#ifdef HAVE_KAFKA
+	if (SUCCEED != (retKafka = send_kafka(metrics, buffer.count)))
+	{
+		err_send_step = "[send kafka]";
+	}
+	#endif
 
 	zbx_json_free(&json);
 

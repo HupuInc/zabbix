@@ -101,7 +101,8 @@ zbx_json_type_t;
 typedef enum
 {
 	ZBX_JSON_EMPTY = 0,
-	ZBX_JSON_COMMA
+	ZBX_JSON_COMMA,
+	ZBX_JSON_COLON
 }
 zbx_json_status_t;
 
