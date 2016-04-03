@@ -586,7 +586,7 @@ static int send_kafka(char **metrics, int count)
 	rd_kafka_topic_t *rkt;
 	char *brokers = "192.168.9.206:9092,192.168.9.205:9092,192.168.9.232:9092";
 	char *topic = "zabbix-metrics";
-	char errstr[512], buf[MAX_STRING_LEN];
+	char errstr[512];
 	// char tmp[MAX_STRING_LEN], host[MAX_STRING_LEN], key[MAX_STRING_LEN], value[MAX_STRING_LEN];
 	int i, sendcnt = 0;
 
@@ -614,12 +614,11 @@ static int send_kafka(char **metrics, int count)
 
 	for (i = 0; i < count; i++)
 	{
-		buf = metrics[i];
 		/* Send/Produce message. */
-		size_t len = strlen(buf);
+		size_t len = strlen(metrics[i]);
 		if (rd_kafka_produce(rkt, RD_KAFKA_PARTITION_UA,
 				     RD_KAFKA_MSG_F_FREE,
-				     buf, len,
+				     metrics[i], len,
 				     NULL, 0,
 				     NULL) == -1) {
 			zabbix_log(LOG_LEVEL_ERR, "Failed to produce to topic %s: %s", rd_kafka_topic_name(rkt), rd_kafka_err2str(rd_kafka_last_error()));
@@ -748,8 +747,6 @@ static char *__zbx_jsonstring_init(char *json_metric, ZBX_ACTIVE_BUFFER_ELEMENT 
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->logeventid);
 		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
-	zbx_json_adduint64(&json, ZBX_PROTO_TAG_CLOCK, el->ts.sec);
-	zbx_json_adduint64(&json, ZBX_PROTO_TAG_NS, el->ts.ns);
 
 	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_CLOCK, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 	zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->ts.sec);
@@ -791,16 +788,17 @@ static int	send_buffer(const char *host, unsigned short port)
 	zbx_timespec_t			ts;
 	const char			*err_send_step = "";
 
+	#ifdef HAVE_KAFKA
+	char *metrics[buffer.count], *json_metric;
+	int buffer_size_last = 0;
+	size_t metrics_len = 0;
+	#endif
+
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() host:'%s' port:%d values:%d/%d",
 			__function_name, host, port, buffer.count, CONFIG_BUFFER_SIZE);
 
 	if (0 == buffer.count)
 		goto ret;
-
-	#ifdef HAVE_KAFKA
-	char *metrics[buffer.count], *json_metric;
-	int buffer_size_last = 0;
-	#endif
 
 	now = (int)time(NULL);
 
@@ -844,7 +842,8 @@ static int	send_buffer(const char *host, unsigned short port)
 		json_metric = zbx_malloc(json_metric, json.buffer_allocated - buffer_size_last);
 		json_metric = __zbx_jsonstring_init(json_metric, el);
 		buffer_size_last = json.buffer_allocated;
-		zbx_strcpy_alloc(&(metrics[i]), sizeof(json_metric), 0, json_metric);
+		metrics_len = sizeof(json_metric);
+		zbx_strcpy_alloc(&(metrics[i]), &metrics_len, 0, json_metric);
 		zbx_free(json_metric);
 		#endif
 	}
@@ -883,7 +882,7 @@ static int	send_buffer(const char *host, unsigned short port)
 		err_send_step = "[connect] ";
 
 	#ifdef HAVE_KAFKA
-	if (SUCCEED != (retKafka = send_kafka(metrics, buffer.count)))
+	if (SUCCEED != send_kafka(metrics, buffer.count))
 	{
 		err_send_step = "[send kafka]";
 	}
