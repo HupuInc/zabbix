@@ -1341,6 +1341,20 @@ if test "x$java" = "xyes"; then
 	fi
 fi
 
+if test "x$agent" = "xyes"; then
+  found_kafka="no"
+  dnl Check for librdkafka [by default - skip]
+  LIBKAFKA_CHECK_CONFIG([no])
+  if test "x$want_kafka" = "xyes"; then
+    if test "x$found_kafka" != "xyes"; then
+      AC_MSG_ERROR([Invalid kafka directory - unable to find rdkafka.h])
+    fi
+  fi
+  CFLAGS="$CFLAGS $KAFKA_CFLAGS"
+  AGENT_LDFLAGS="$AGENT_LDFLAGS $KAFKA_LDFLAGS"
+  AGENT_LIBS="$AGENT_LIBS $KAFKA_LIBS"
+fi
+
 AM_CONDITIONAL(JABBER, test "x$found_jabber" = "xyes")
 AM_CONDITIONAL(WITH_ODBC, test "x$have_unixodbc" = "xyes")
 
@@ -1571,7 +1585,8 @@ fi
 
 echo "
   LDAP support:          ${found_ldap}
-  IPv6 support:          ${have_ipv6}"
+  IPv6 support:          ${have_ipv6}
+  Kafka support:         ${found_kafka}"
 
 echo
 echo "***********************************************************"
