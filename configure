@@ -642,6 +642,9 @@ WITH_ODBC_FALSE
 WITH_ODBC_TRUE
 JABBER_FALSE
 JABBER_TRUE
+KAFKA_LIBS
+KAFKA_LDFLAGS
+KAFKA_CFLAGS
 JAR
 JAVAC
 OPENIPMI_LIBS
@@ -826,6 +829,7 @@ with_unixodbc
 with_net_snmp
 with_ssh2
 with_openipmi
+with_kafka
 with_ldap
 with_libcurl
 with_iconv
@@ -1528,6 +1532,11 @@ If you want to check IPMI devices:
                           search through a number of common places for the
                           OPENIPMI files.
 
+If you want to check KAFKA Library:
+  --with-kafka[=DIR]      Include KAFKA support [default=no]. DIR is the KAFKA
+                          Library base install directory, default is to search
+                          through a number of common places for the KAFKA
+                          files.
 If you want to check LDAP servers:
   --with-ldap[=DIR]       Include LDAP support [default=no]. DIR is the LDAP
                           base install directory, default is to search through
@@ -5747,7 +5756,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -5793,7 +5802,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -5817,7 +5826,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -5862,7 +5871,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -5886,7 +5895,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -10309,6 +10318,137 @@ test -n "$JAR" || JAR="no"
 	fi
 fi
 
+if test "x$agent" = "xyes"; then
+  found_kafka="no"
+
+
+# Check whether --with-kafka was given.
+if test "${with_kafka+set}" = set; then :
+  withval=$with_kafka;  if test "$withval" = "no"; then
+            want_kafka="no"
+            _libkafka_with="no"
+        elif test "$withval" = "yes"; then
+            want_kafka="yes"
+            _libkafka_with="yes"
+        else
+            want_kafka="yes"
+            _libkafka_with=$withval
+        fi
+
+else
+  _libkafka_with=no
+fi
+
+
+  if test "x$_libkafka_with" != x"no"; then
+       { $as_echo "$as_me:${as_lineno-$LINENO}: checking for KAFKA support" >&5
+$as_echo_n "checking for KAFKA support... " >&6; }
+
+       if test "$_libkafka_with" = "yes"; then
+               if test -f /usr/local/include/librdkafka/rdkafka.h; then
+                       KAFKA_INCDIR=/usr/local/include
+                       KAFKA_LIBDIR=/usr/local/lib
+		       found_kafka="yes"
+               elif test -f /usr/include/librdkafka/rdkafka.h; then
+                       KAFKA_INCDIR=/usr/include
+                       KAFKA_LIBDIR=/usr/lib
+		       found_kafka="yes"
+               else
+                       found_kafka="no"
+                       { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+               fi
+       else
+               if test -f $_libkafka_with/include/librdkafka/rdkafka.h; then
+                       KAFKA_INCDIR=$_libkafka_with/include
+                       KAFKA_LIBDIR=$_libkafka_with/lib
+		       found_kafka="yes"
+               else
+                       found_kafka="no"
+                       { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+               fi
+       fi
+
+       if test "x$found_kafka" != "xno"; then
+               if test "x$enable_static" = "xyes"; then
+                       KAFKA_LIBS=" -lpthread -lz -ltr $KAFKA_LIBS"
+               fi
+
+               KAFKA_CFLAGS="-I$KAFKA_INCDIR"
+               KAFKA_LDFLAGS="-L$KAFKA_LIBDIR"
+               KAFKA_LIBS="-lrdkafka -lpthread -lz -lrt $KAFKA_LIBS"
+
+               found_kafka="yes"
+
+$as_echo "#define HAVE_KAFKA 1" >>confdefs.h
+
+               { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+	       if test "x$enable_static" = "xyes"; then
+                       { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lpthread" >&5
+$as_echo_n "checking for main in -lpthread... " >&6; }
+if ${ac_cv_lib_pthread_main+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpthread  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+int
+main ()
+{
+return main ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_pthread_main=yes
+else
+  ac_cv_lib_pthread_main=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pthread_main" >&5
+$as_echo "$ac_cv_lib_pthread_main" >&6; }
+if test "x$ac_cv_lib_pthread_main" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBPTHREAD 1
+_ACEOF
+
+  LIBS="-lpthread $LIBS"
+
+else
+  as_fn_error $? "Not found Pthread library" "$LINENO" 5
+fi
+
+               fi
+
+       fi
+  fi
+
+
+
+
+
+  unset _libkafka_with
+
+  if test "x$want_kafka" = "xyes"; then
+    if test "x$found_kafka" != "xyes"; then
+      as_fn_error $? "Invalid kafka directory - unable to find rdkafka.h" "$LINENO" 5
+    fi
+  fi
+  CFLAGS="$CFLAGS $KAFKA_CFLAGS"
+  AGENT_LDFLAGS="$AGENT_LDFLAGS $KAFKA_LDFLAGS"
+  AGENT_LIBS="$AGENT_LIBS $KAFKA_LIBS"
+fi
+
  if test "x$found_jabber" = "xyes"; then
   JABBER_TRUE=
   JABBER_FALSE='#'
@@ -12842,7 +12982,8 @@ fi
 
 echo "
   LDAP support:          ${found_ldap}
-  IPv6 support:          ${have_ipv6}"
+  IPv6 support:          ${have_ipv6}
+  Kafka support:         ${found_kafka}"
 
 echo
 echo "***********************************************************"
