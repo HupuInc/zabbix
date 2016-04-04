@@ -627,6 +627,11 @@ static int send_kafka(char **metrics, int count)
 		sendcnt++;
 	}
 
+	rd_kafka_topic_destroy(rkt);
+	rd_kafka_destroy(rk);
+	if (topic_conf)
+		rd_kafka_topic_conf_destroy(topic_conf);
+
 ret:
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%s send count = %d", __function_name, zbx_result_string(ret), sendcnt);
 	return ret;
@@ -693,71 +698,74 @@ static char	*__zbx_json_insstring(char *p, const char *string, zbx_json_type_t t
 	return p;
 }
 
-static void __zbx_json_insmetric(char *json_metric, const char *string, zbx_json_type_t type, zbx_json_status_t status) {
-	json_metric = __zbx_json_insstring(json_metric, string, type);
+static char *__zbx_json_insmetric(char *p, const char *string, zbx_json_type_t type, zbx_json_status_t status) {
+	p = __zbx_json_insstring(p, string, type);
 	if (status == ZBX_JSON_COMMA)
-		*json_metric++ = ',';
+		*p++ = ',';
 	else if(status == ZBX_JSON_COLON)
-		*json_metric++ = ':';
+		*p++ = ':';
+	return p;
 }
 
-static char *__zbx_jsonstring_init(char *json_metric, ZBX_ACTIVE_BUFFER_ELEMENT *el) {
+static void __zbx_jsonstring_init(char *json_metric, ZBX_ACTIVE_BUFFER_ELEMENT *el) {
 	char buf[MAX_STRING_LEN];
-	*json_metric++ = '{';
-	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_HOST, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
-	__zbx_json_insmetric(json_metric, el->host, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+	char *p;
+	p = json_metric;
+	*p++ = '{';
+	p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_HOST, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	p = __zbx_json_insmetric(p, el->host, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
 
-	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_KEY, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
-	__zbx_json_insmetric(json_metric, el->key, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+	p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_KEY, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	p = __zbx_json_insmetric(p, el->key, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
 
-	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_VALUE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
-	__zbx_json_insmetric(json_metric, el->value, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+	p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_VALUE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	p = __zbx_json_insmetric(p, el->value, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
 
 	if (ITEM_STATE_NOTSUPPORTED == el->state) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_STATE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_STATE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, ITEM_STATE_NOTSUPPORTED);
-		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
 	if (0 != el->lastlogsize) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGLASTSIZE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_LOGLASTSIZE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->lastlogsize);
-		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
 	if (el->mtime) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_MTIME, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_MTIME, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->mtime);
-		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
 	if (el->timestamp) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGTIMESTAMP, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_LOGTIMESTAMP, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->timestamp);
-		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
 	if (el->source) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGSOURCE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
-		__zbx_json_insmetric(json_metric, el->source, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_LOGSOURCE, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, el->source, ZBX_JSON_TYPE_STRING, ZBX_JSON_COMMA);
 	}
 	if (el->severity) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGSEVERITY, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_LOGSEVERITY, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->severity);
-		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
 	if (el->logeventid) {
-		__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_LOGEVENTID, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+		p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_LOGEVENTID, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 		zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->logeventid);
-		__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+		p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 	}
 
-	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_CLOCK, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_CLOCK, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 	zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->ts.sec);
-	__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
 
-	__zbx_json_insmetric(json_metric, ZBX_PROTO_TAG_NS, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
+	p = __zbx_json_insmetric(p, ZBX_PROTO_TAG_NS, ZBX_JSON_TYPE_STRING, ZBX_JSON_COLON);
 	zbx_snprintf(buf, sizeof(buf), ZBX_FS_UI64, el->ts.ns);
-	__zbx_json_insmetric(json_metric, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_COMMA);
+	p = __zbx_json_insmetric(p, buf, ZBX_JSON_TYPE_INT, ZBX_JSON_EMPTY);
 
-	*json_metric++ = '}';
-	return json_metric;
+	*p++ = '}';
+	*p++ = '\0';
 }
 #endif
 
@@ -791,7 +799,7 @@ static int	send_buffer(const char *host, unsigned short port)
 	#ifdef HAVE_KAFKA
 	char *metrics[buffer.count], *json_metric;
 	int buffer_size_last = 0;
-	size_t metrics_len = 0;
+	size_t metrics_len = 0, metrics_offset = 0;
 	#endif
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() host:'%s' port:%d values:%d/%d",
@@ -839,11 +847,13 @@ static int	send_buffer(const char *host, unsigned short port)
 		zbx_json_adduint64(&json, ZBX_PROTO_TAG_NS, el->ts.ns);
 		zbx_json_close(&json);
 		#ifdef HAVE_KAFKA
-		json_metric = zbx_malloc(json_metric, json.buffer_allocated - buffer_size_last);
-		json_metric = __zbx_jsonstring_init(json_metric, el);
-		buffer_size_last = json.buffer_allocated;
-		metrics_len = sizeof(json_metric);
-		zbx_strcpy_alloc(&(metrics[i]), &metrics_len, 0, json_metric);
+		json_metric = zbx_calloc(json_metric, (size_t)(json.buffer_size - buffer_size_last), sizeof(char));
+		__zbx_jsonstring_init(json_metric, el);
+		zabbix_log(LOG_LEVEL_DEBUG, "json_metric : %s", json_metric);
+		buffer_size_last = json.buffer_size;
+		metrics_len = strlen(json_metric);
+		metrics[i] = NULL;
+		zbx_strcpy_alloc(&(metrics[i]), &metrics_len, &metrics_offset, json_metric);
 		zbx_free(json_metric);
 		#endif
 	}
