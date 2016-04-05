@@ -87,11 +87,11 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/ax_lib_ibm_db2.m4 \
 	$(top_srcdir)/m4/ax_lib_oracle_oci.m4 \
 	$(top_srcdir)/m4/ax_lib_postgresql.m4 \
 	$(top_srcdir)/m4/ax_lib_sqlite3.m4 $(top_srcdir)/m4/iconv.m4 \
-	$(top_srcdir)/m4/jabber.m4 $(top_srcdir)/m4/ldap.m4 \
-	$(top_srcdir)/m4/libcurl.m4 $(top_srcdir)/m4/libssh2.m4 \
-	$(top_srcdir)/m4/libunixodbc.m4 $(top_srcdir)/m4/libxml2.m4 \
-	$(top_srcdir)/m4/netsnmp.m4 $(top_srcdir)/m4/openipmi.m4 \
-	$(top_srcdir)/m4/resolv.m4 $(top_srcdir)/m4/kafka.m4 \
+	$(top_srcdir)/m4/jabber.m4 $(top_srcdir)/m4/kafka.m4 \
+	$(top_srcdir)/m4/ldap.m4 $(top_srcdir)/m4/libcurl.m4 \
+	$(top_srcdir)/m4/libssh2.m4 $(top_srcdir)/m4/libunixodbc.m4 \
+	$(top_srcdir)/m4/libxml2.m4 $(top_srcdir)/m4/netsnmp.m4 \
+	$(top_srcdir)/m4/openipmi.m4 $(top_srcdir)/m4/resolv.m4 \
 	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -276,8 +276,6 @@ PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PG_CONFIG = @PG_CONFIG@
 PKG_CONFIG = @PKG_CONFIG@
-PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
-PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSTGRESQL_CFLAGS = @POSTGRESQL_CFLAGS@
 POSTGRESQL_LDFLAGS = @POSTGRESQL_LDFLAGS@
 POSTGRESQL_LIBS = @POSTGRESQL_LIBS@
@@ -286,6 +284,8 @@ PROXY_LDFLAGS = @PROXY_LDFLAGS@
 PROXY_LIBS = @PROXY_LIBS@
 RANLIB = @RANLIB@
 RESOLV_LIBS = @RESOLV_LIBS@
+SENDER_LDFLAGS = @SENDER_LDFLAGS@
+SENDER_LIBS = @SENDER_LIBS@
 SERVER_LDFLAGS = @SERVER_LDFLAGS@
 SERVER_LIBS = @SERVER_LIBS@
 SET_MAKE = @SET_MAKE@

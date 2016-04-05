@@ -1353,6 +1353,9 @@ if test "x$agent" = "xyes"; then
   CFLAGS="$CFLAGS $KAFKA_CFLAGS"
   AGENT_LDFLAGS="$AGENT_LDFLAGS $KAFKA_LDFLAGS"
   AGENT_LIBS="$AGENT_LIBS $KAFKA_LIBS"
+  SENDER_LDFLAGS="$SENDER_LDFLAGS $KAFKA_LDFLAGS"
+  SENDER_LIBS="$SENDER_LIBS $KAFKA_LIBS"
+  
 fi
 
 AM_CONDITIONAL(JABBER, test "x$found_jabber" = "xyes")
@@ -1421,6 +1424,9 @@ AC_SUBST(PROXY_LIBS)
 
 AC_SUBST(AGENT_LDFLAGS)
 AC_SUBST(AGENT_LIBS)
+
+AC_SUBST(SENDER_LDFLAGS)
+AC_SUBST(SENDER_LIBS)
 
 dnl *****************************************************************
 dnl *                                                               *

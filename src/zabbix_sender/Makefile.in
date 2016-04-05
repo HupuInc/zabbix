@@ -88,11 +88,11 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/ax_lib_ibm_db2.m4 \
 	$(top_srcdir)/m4/ax_lib_oracle_oci.m4 \
 	$(top_srcdir)/m4/ax_lib_postgresql.m4 \
 	$(top_srcdir)/m4/ax_lib_sqlite3.m4 $(top_srcdir)/m4/iconv.m4 \
-	$(top_srcdir)/m4/jabber.m4 $(top_srcdir)/m4/ldap.m4 \
-	$(top_srcdir)/m4/libcurl.m4 $(top_srcdir)/m4/libssh2.m4 \
-	$(top_srcdir)/m4/libunixodbc.m4 $(top_srcdir)/m4/libxml2.m4 \
-	$(top_srcdir)/m4/netsnmp.m4 $(top_srcdir)/m4/openipmi.m4 \
-	$(top_srcdir)/m4/resolv.m4 $(top_srcdir)/m4/kafka.m4 \
+	$(top_srcdir)/m4/jabber.m4 $(top_srcdir)/m4/kafka.m4 \
+	$(top_srcdir)/m4/ldap.m4 $(top_srcdir)/m4/libcurl.m4 \
+	$(top_srcdir)/m4/libssh2.m4 $(top_srcdir)/m4/libunixodbc.m4 \
+	$(top_srcdir)/m4/libxml2.m4 $(top_srcdir)/m4/netsnmp.m4 \
+	$(top_srcdir)/m4/openipmi.m4 $(top_srcdir)/m4/resolv.m4 \
 	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -112,6 +112,8 @@ zabbix_sender_DEPENDENCIES =  \
 	$(top_srcdir)/src/libs/zbxcrypto/libzbxcrypto.a \
 	$(top_srcdir)/src/libs/zbxconf/libzbxconf.a \
 	$(top_srcdir)/src/libs/zbxjson/libzbxjson.a
+zabbix_sender_LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(zabbix_sender_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -255,8 +257,6 @@ PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PG_CONFIG = @PG_CONFIG@
 PKG_CONFIG = @PKG_CONFIG@
-PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
-PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSTGRESQL_CFLAGS = @POSTGRESQL_CFLAGS@
 POSTGRESQL_LDFLAGS = @POSTGRESQL_LDFLAGS@
 POSTGRESQL_LIBS = @POSTGRESQL_LIBS@
@@ -265,6 +265,8 @@ PROXY_LDFLAGS = @PROXY_LDFLAGS@
 PROXY_LIBS = @PROXY_LIBS@
 RANLIB = @RANLIB@
 RESOLV_LIBS = @RESOLV_LIBS@
+SENDER_LDFLAGS = @SENDER_LDFLAGS@
+SENDER_LIBS = @SENDER_LIBS@
 SERVER_LDFLAGS = @SERVER_LDFLAGS@
 SERVER_LIBS = @SERVER_LIBS@
 SET_MAKE = @SET_MAKE@
@@ -337,15 +339,14 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 zabbix_sender_SOURCES = zabbix_sender.c
-zabbix_sender_LDADD = \
-	$(top_srcdir)/src/libs/zbxcomms/libzbxcomms.a \
+zabbix_sender_LDADD = $(top_srcdir)/src/libs/zbxcomms/libzbxcomms.a \
 	$(top_srcdir)/src/libs/zbxcommon/libzbxcommon.a \
 	$(top_srcdir)/src/libs/zbxlog/libzbxlog.a \
 	$(top_srcdir)/src/libs/zbxsys/libzbxsys.a \
 	$(top_srcdir)/src/libs/zbxcrypto/libzbxcrypto.a \
 	$(top_srcdir)/src/libs/zbxconf/libzbxconf.a \
-	$(top_srcdir)/src/libs/zbxjson/libzbxjson.a
-
+	$(top_srcdir)/src/libs/zbxjson/libzbxjson.a @SENDER_LIBS@
+zabbix_sender_LDFLAGS = @SENDER_LDFLAGS@
 EXTRA_DIST = win32
 all: all-am
 
@@ -426,7 +427,7 @@ clean-binPROGRAMS:
 
 zabbix_sender$(EXEEXT): $(zabbix_sender_OBJECTS) $(zabbix_sender_DEPENDENCIES) $(EXTRA_zabbix_sender_DEPENDENCIES) 
 	@rm -f zabbix_sender$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(zabbix_sender_OBJECTS) $(zabbix_sender_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(zabbix_sender_LINK) $(zabbix_sender_OBJECTS) $(zabbix_sender_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
