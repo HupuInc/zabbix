@@ -25,6 +25,9 @@
 #include "log.h"
 #include "zbxgetopt.h"
 #include "zbxjson.h"
+#ifdef HAVE_KAFKA
+#	include <librdkafka/rdkafka.h>
+#endif
 
 const char	*progname = NULL;
 const char	title_message[] = "Zabbix Sender";
@@ -299,6 +302,24 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 	zbx_sock_t		sock;
 	int			tcp_ret, ret = FAIL;
 
+	#ifdef HAVE_KAFKA
+	rd_kafka_t *rk;
+	rd_kafka_conf_t *conf;
+	rd_kafka_topic_conf_t *topic_conf;
+	rd_kafka_topic_t *rkt;
+	rd_kafka_message_t *rkmessages;
+	char *brokers = "192.168.9.211:9092,192.168.9.205:9092,192.168.9.232:9092";
+	char *topic = "zabbix-metrics";
+	char errstr[512];
+
+	const char		*p;
+	char buffer[MAX_BUFFER_LEN];
+	struct zbx_json_parse	jp;
+	struct zbx_json_parse	jp_data, jp_row;
+	int message_cnt, i = 0;
+	size_t sz;
+	#endif
+
 	assert(args);
 	assert(((zbx_thread_args_t *)args)->args);
 
@@ -329,6 +350,59 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 	if (FAIL == tcp_ret)
 		zabbix_log(LOG_LEVEL_DEBUG, "send value error: %s", zbx_tcp_strerror());
 
+	#ifdef HAVE_KAFKA
+	conf = rd_kafka_conf_new();
+	topic_conf = rd_kafka_topic_conf_new();
+
+	/* Create Kafka handle */
+	if (!(rk = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
+				errstr, sizeof(errstr)))) {
+		zabbix_log(LOG_LEVEL_ERR, "Failed to create new producer: %s", errstr);
+	}
+
+	/* Add brokers */
+	if (rd_kafka_brokers_add(rk, brokers) == 0) {
+		zabbix_log(LOG_LEVEL_ERR, "No valid brokers specified");
+	}
+
+	/* Create topic */
+	rkt = rd_kafka_topic_new(rk, topic, topic_conf);
+	topic_conf = NULL;
+
+	if (SUCCEED != zbx_json_open(sentdval_args->json.buffer, &jp))
+		printf("cannot parse list of active checks: %s", zbx_json_strerror());
+
+	if (SUCCEED != zbx_json_brackets_by_name(&jp, ZBX_PROTO_TAG_DATA, &jp_data))
+		printf("cannot parse list of active checks: %s", zbx_json_strerror());
+
+	message_cnt = zbx_json_count(&jp_data);
+	sz = message_cnt * sizeof(rd_kafka_message_t);
+	rkmessages = zbx_malloc(rkmessages, sz);
+	memset(rkmessages, 0, sz);
+	p = NULL;
+	for (i = 0; NULL != (p = zbx_json_next(&jp_data, p)); i++)
+	{
+		if (SUCCEED != zbx_json_brackets_open(p, &jp_row))
+			printf("cannot parse list of active checks: %s", zbx_json_strerror());
+		zbx_strlcpy(buffer, jp_row.start, (size_t)(jp_row.end - jp_row.start + 2));
+		/* Send/Produce message. */
+		rkmessages[i].payload = zbx_strdup(NULL,buffer);
+		rkmessages[i].len = strlen(buffer);
+		rkmessages[i].key = NULL;
+		rkmessages[i].key_len = 0;
+	}
+	if (rd_kafka_produce_batch(rkt, RD_KAFKA_PARTITION_UA,
+				   RD_KAFKA_MSG_F_FREE,
+				   rkmessages,
+				   message_cnt) == -1) {
+		zabbix_log(LOG_LEVEL_ERR, "Failed to produce to topic %s: %s", rd_kafka_topic_name(rkt), rd_kafka_err2str(rd_kafka_last_error()));
+	}
+	sleep(1);
+	rd_kafka_topic_destroy(rkt);
+	rd_kafka_destroy(rk);
+	if (topic_conf)
+		rd_kafka_topic_conf_destroy(topic_conf);
+	#endif
 	zbx_thread_exit(ret);
 }
 
