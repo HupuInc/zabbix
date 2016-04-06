@@ -54,6 +54,8 @@ const char	*help_message[] = {
 	"                                       Timestamp should be specified in Unix timestamp format",
 	"  -r --real-time                       Send metrics one by one as soon as they are received",
 	"                                       This can be used when reading from standard input",
+	"  -b --brokers                         a comma-separated list of kafka brokers, support by --with-kafka",
+	"  -t --topics                          Specify kafka topics, support by --with-kafka",
 	"",
 	"  -v --verbose                         Verbose mode, -vv for more details",
 	"",
@@ -81,11 +83,15 @@ static struct zbx_option	longopts[] =
 	{"verbose",		0,	NULL,	'v'},
 	{"help",		0,	NULL,	'h'},
 	{"version",		0,	NULL,	'V'},
+	#ifdef HAVE_KAFKA
+	{"brokers",		0,	NULL,	'b'},
+	{"topics",		0,	NULL,	't'},
+	#endif
 	{NULL}
 };
 
 /* short options */
-static char	shortopts[] = "c:I:z:p:s:k:o:Ti:rvhV";
+static char	shortopts[] = "c:I:z:p:s:k:o:b:t:Ti:rvhV";
 
 /* end of COMMAND LINE OPTIONS */
 
@@ -101,6 +107,10 @@ unsigned short	ZABBIX_SERVER_PORT = 0;
 static char	*ZABBIX_HOSTNAME = NULL;
 static char	*ZABBIX_KEY = NULL;
 static char	*ZABBIX_KEY_VALUE = NULL;
+#ifdef HAVE_KAFKA
+static char *CONFIG_KAFKA_BROKERS = NULL;
+static char *CONFIG_KAFKA_TOPICS = NULL;
+#endif
 
 #if !defined(_WINDOWS)
 static void	send_signal_handler(int sig)
@@ -308,8 +318,6 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 	rd_kafka_topic_conf_t *topic_conf;
 	rd_kafka_topic_t *rkt;
 	rd_kafka_message_t *rkmessages;
-	char *brokers = "192.168.9.211:9092,192.168.9.205:9092,192.168.9.232:9092";
-	char *topic = "zabbix-metrics";
 	char errstr[512];
 
 	const char		*p;
@@ -361,12 +369,12 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 	}
 
 	/* Add brokers */
-	if (rd_kafka_brokers_add(rk, brokers) == 0) {
+	if (rd_kafka_brokers_add(rk, CONFIG_KAFKA_BROKERS) == 0) {
 		zabbix_log(LOG_LEVEL_ERR, "No valid brokers specified");
 	}
 
 	/* Create topic */
-	rkt = rd_kafka_topic_new(rk, topic, topic_conf);
+	rkt = rd_kafka_topic_new(rk, CONFIG_KAFKA_TOPICS, topic_conf);
 	topic_conf = NULL;
 
 	if (SUCCEED != zbx_json_open(sentdval_args->json.buffer, &jp))
@@ -404,6 +412,7 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 	rd_kafka_destroy(rk);
 	if (topic_conf)
 		rd_kafka_topic_conf_destroy(topic_conf);
+	zbx_free(rkmessages);
 	#endif
 	zbx_thread_exit(ret);
 }
@@ -411,6 +420,9 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 static void    zbx_load_config(const char *config_file)
 {
 	char	*cfg_source_ip = NULL, *cfg_active_hosts = NULL, *cfg_hostname = NULL, *r = NULL;
+	#ifdef HAVE_KAFKA
+	char *cfg_kafka_brokers = NULL, *cfg_kafka_topics = NULL;
+	#endif
 
 	struct cfg_line	cfg[] =
 	{
@@ -422,6 +434,12 @@ static void    zbx_load_config(const char *config_file)
 			PARM_OPT,	0,			0},
 		{"Hostname",			&cfg_hostname,				TYPE_STRING,
 			PARM_OPT,	0,			0},
+		#ifdef HAVE_KAFKA
+		{"KafkaBrokers",			&cfg_kafka_brokers,			TYPE_STRING,
+			PARM_OPT,	0,			0},
+		{"KafkaTopics",			&cfg_kafka_topics,			TYPE_STRING,
+			PARM_OPT,	0,			0},
+		#endif
 		{NULL}
 	};
 
@@ -470,6 +488,26 @@ static void    zbx_load_config(const char *config_file)
 			}
 			zbx_free(cfg_hostname);
 		}
+
+		#ifdef HAVE_KAFKA
+		if (NULL != cfg_kafka_brokers)
+		{
+			if (NULL == CONFIG_KAFKA_BROKERS)
+			{
+				CONFIG_KAFKA_BROKERS = zbx_strdup(CONFIG_KAFKA_BROKERS, cfg_kafka_brokers);
+			}
+			zbx_free(cfg_kafka_brokers);
+		}
+
+		if (NULL != cfg_kafka_topics)
+		{
+			if (NULL == CONFIG_KAFKA_TOPICS)
+			{
+				CONFIG_KAFKA_TOPICS = zbx_strdup(CONFIG_KAFKA_TOPICS, cfg_kafka_topics);
+			}
+			zbx_free(cfg_kafka_topics);
+		}
+		#endif
 	}
 }
 
@@ -526,6 +564,14 @@ static void	parse_commandline(int argc, char **argv)
 				else if (LOG_LEVEL_DEBUG > CONFIG_LOG_LEVEL)
 					CONFIG_LOG_LEVEL = LOG_LEVEL_DEBUG;
 				break;
+			#ifdef HAVE_KAFKA
+			case 'b':
+				CONFIG_KAFKA_BROKERS = zbx_strdup(CONFIG_KAFKA_BROKERS, zbx_optarg);
+				break;
+			case 't':
+				CONFIG_KAFKA_TOPICS = zbx_strdup(CONFIG_KAFKA_TOPICS, zbx_optarg);
+				break;
+			#endif
 			default:
 				usage();
 				exit(EXIT_FAILURE);

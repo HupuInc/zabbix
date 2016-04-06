@@ -584,10 +584,7 @@ static int send_kafka(rd_kafka_message_t *rkmessages, int message_cnt)
 	rd_kafka_conf_t *conf;
 	rd_kafka_topic_conf_t *topic_conf;
 	rd_kafka_topic_t *rkt;
-	char *brokers = "192.168.9.211:9092,192.168.9.205:9092,192.168.9.232:9092";
-	char *topic = "zabbix-metrics";
 	char errstr[512];
-	// char tmp[MAX_STRING_LEN], host[MAX_STRING_LEN], key[MAX_STRING_LEN], value[MAX_STRING_LEN];
 	int i, sendcnt = 0;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() JSON metrics:'%s'", __function_name, rkmessages);
@@ -603,13 +600,13 @@ static int send_kafka(rd_kafka_message_t *rkmessages, int message_cnt)
 	}
 
 	/* Add brokers */
-	if (rd_kafka_brokers_add(rk, brokers) == 0) {
+	if (rd_kafka_brokers_add(rk, CONFIG_KAFKA_BROKERS) == 0) {
 		zabbix_log(LOG_LEVEL_ERR, "No valid brokers specified");
 		goto ret;
 	}
 
 	/* Create topic */
-	rkt = rd_kafka_topic_new(rk, topic, topic_conf);
+	rkt = rd_kafka_topic_new(rk, CONFIG_KAFKA_TOPICS, topic_conf);
 	topic_conf = NULL;
 
 	if (rd_kafka_produce_batch(rkt, RD_KAFKA_PARTITION_UA,
@@ -774,6 +771,7 @@ static int	send_buffer(const char *host, unsigned short port)
 	{
 		err_send_step = "[send kafka]";
 	}
+	zbx_free(rkmessages);
 	#endif
 
 	zbx_json_free(&json);

@@ -60,6 +60,11 @@ char	**CONFIG_PERF_COUNTERS		= NULL;
 
 char	*CONFIG_USER			= NULL;
 
+#ifdef HAVE_KAFKA
+char *CONFIG_KAFKA_BROKERS = NULL;
+char *CONFIG_KAFKA_TOPICS = NULL;
+#endif
+
 /******************************************************************************
  *                                                                            *
  * Function: load_aliases                                                     *

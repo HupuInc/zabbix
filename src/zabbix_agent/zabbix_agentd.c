@@ -356,6 +356,13 @@ static void	set_defaults(void)
 	if (NULL == CONFIG_PID_FILE)
 		CONFIG_PID_FILE = "/tmp/zabbix_agentd.pid";
 #endif
+
+#ifdef HAVE_KAFKA
+	if (NULL == CONFIG_KAFKA_BROKERS)
+		CONFIG_KAFKA_BROKERS = zbx_strdup(CONFIG_KAFKA_BROKERS, "127.0.0.1:9092");
+	if (NULL == CONFIG_KAFKA_TOPICS)
+		CONFIG_KAFKA_TOPICS = zbx_strdup(CONFIG_KAFKA_TOPICS, "zabbix-metrics");
+#endif
 }
 
 /******************************************************************************
@@ -554,6 +561,12 @@ static void	zbx_load_config(int requirement)
 #endif
 #ifdef _WINDOWS
 		{"PerfCounter",			&CONFIG_PERF_COUNTERS,			TYPE_MULTISTRING,
+			PARM_OPT,	0,			0},
+#endif
+#ifdef HAVE_KAFKA
+		{"KafkaBrokers",			&CONFIG_KAFKA_BROKERS,			TYPE_STRING,
+			PARM_OPT,	0,			0},
+		{"KafkaTopics",			&CONFIG_KAFKA_TOPICS,			TYPE_STRING,
 			PARM_OPT,	0,			0},
 #endif
 		{NULL}

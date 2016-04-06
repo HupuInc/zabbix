@@ -32,6 +32,10 @@ extern int	CONFIG_BUFFER_SIZE;
 extern int	CONFIG_MAX_LINES_PER_SECOND;
 extern char	*CONFIG_LISTEN_IP;
 extern int	CONFIG_LISTEN_PORT;
+#ifdef HAVE_KAFKA
+extern char *CONFIG_KAFKA_BROKERS;
+extern char *CONFIG_KAFKA_TOPICS;
+#endif
 
 /* define minimal and maximal values of lines to send by agent */
 /* per second for checks `log' and `eventlog', used to parse key parameters */
