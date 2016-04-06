@@ -316,7 +316,7 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 	char buffer[MAX_BUFFER_LEN];
 	struct zbx_json_parse	jp;
 	struct zbx_json_parse	jp_data, jp_row;
-	int message_cnt, i = 0;
+	int message_cnt, i;
 	size_t sz;
 	#endif
 
@@ -385,8 +385,7 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 		if (SUCCEED != zbx_json_brackets_open(p, &jp_row))
 			printf("cannot parse list of active checks: %s", zbx_json_strerror());
 		zbx_strlcpy(buffer, jp_row.start, (size_t)(jp_row.end - jp_row.start + 2));
-		/* Send/Produce message. */
-		rkmessages[i].payload = zbx_strdup(NULL,buffer);
+		rkmessages[i].payload = zbx_strdup(NULL, buffer);
 		rkmessages[i].len = strlen(buffer);
 		rkmessages[i].key = NULL;
 		rkmessages[i].key_len = 0;
@@ -397,7 +396,10 @@ static	ZBX_THREAD_ENTRY(send_value, args)
 				   message_cnt) == -1) {
 		zabbix_log(LOG_LEVEL_ERR, "Failed to produce to topic %s: %s", rd_kafka_topic_name(rkt), rd_kafka_err2str(rd_kafka_last_error()));
 	}
-	sleep(1);
+
+	while (rd_kafka_outq_len(rk) > 0)
+		rd_kafka_poll(rk, 100);
+
 	rd_kafka_topic_destroy(rkt);
 	rd_kafka_destroy(rk);
 	if (topic_conf)
